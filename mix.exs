@@ -60,7 +60,8 @@ defmodule Stripe.Mixfile do
 
   defp deps do
     [
-      {:hackney, "~> 4.0"},
+      # Optional: set `:http_module` to use another HTTP client.
+      {:hackney, "~> 4.0", optional: true},
       {:jason, "~> 1.1"},
       {:telemetry, "~> 1.1"},
       {:uri_query, "~> 0.2.0"},
