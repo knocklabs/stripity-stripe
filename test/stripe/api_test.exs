@@ -184,6 +184,41 @@ defmodule Stripe.APITest do
     assert Map.has_key?(body, "Accept-Encoding")
   end
 
+  describe "compressed responses" do
+    defmodule CompressedResponseMock do
+      def request(_method, _url, _headers, _body, _opts) do
+        {encoding_header, body} = Process.get(:compressed_response)
+        {:ok, 200, [{"Content-Type", "application/json"} | encoding_header], body}
+      end
+    end
+
+    setup do
+      prev_mod = Application.get_env(:stripity_stripe, :http_module)
+      Application.put_env(:stripity_stripe, :http_module, CompressedResponseMock)
+      on_exit(fn -> Application.put_env(:stripity_stripe, :http_module, prev_mod) end)
+    end
+
+    test "decodes gzip bodies, matching the header name in any case" do
+      json = Jason.encode!(%{"id" => "prod_123"})
+
+      for name <- ["Content-Encoding", "content-encoding"] do
+        Process.put(:compressed_response, {[{name, "gzip"}], :zlib.gzip(json)})
+        assert {:ok, %{"id" => "prod_123"}} = Stripe.API.request(%{}, :get, "/v1/products", %{}, [])
+      end
+    end
+
+    test "decodes deflate bodies" do
+      json = Jason.encode!(%{"id" => "prod_123"})
+      Process.put(:compressed_response, {[{"content-encoding", "deflate"}], :zlib.zip(json)})
+      assert {:ok, %{"id" => "prod_123"}} = Stripe.API.request(%{}, :get, "/v1/products", %{}, [])
+    end
+
+    test "leaves bodies with no content encoding as they are" do
+      Process.put(:compressed_response, {[], Jason.encode!(%{"id" => "prod_123"})})
+      assert {:ok, %{"id" => "prod_123"}} = Stripe.API.request(%{}, :get, "/v1/products", %{}, [])
+    end
+  end
+
   test "reads hackney timeout opts from config" do
     # Return request opts as response body
     defmodule HackneyMock2 do

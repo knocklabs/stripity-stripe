@@ -7,6 +7,9 @@ defmodule Stripe.API do
   """
   alias Stripe.{Config, Error}
 
+  # hackney is optional. The pool only starts when `:use_connection_pool` is true.
+  @compile {:no_warn_undefined, [:hackney_pool]}
+
   @pool_name __MODULE__
 
   @api_version "2025-11-17.clover"
@@ -507,9 +510,12 @@ defmodule Stripe.API do
   end
 
   defp decompress_body(body, headers) do
-    headers_dict = :hackney_headers.new(headers)
+    content_encoding =
+      Enum.find_value(headers, fn {name, value} ->
+        if String.downcase(name) == "content-encoding", do: value
+      end)
 
-    case :hackney_headers.get_value("Content-Encoding", headers_dict) do
+    case content_encoding do
       "gzip" -> :zlib.gunzip(body)
       "deflate" -> :zlib.unzip(body)
       _ -> body
